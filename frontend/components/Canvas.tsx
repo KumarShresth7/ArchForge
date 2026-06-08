@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Controls,
   Background,
   BackgroundVariant,
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
+  useReactFlow,
   Node,
   Edge,
   Connection,
@@ -19,40 +21,40 @@ import "@xyflow/react/dist/style.css";
 
 import ArchitectureNode from "./ArchitectureNode";
 import EvaluationPanel from "./EvaluationPanel";
+import NodeConfigPanel from "./NodeConfigPanel";
 import StatusBadge from "./StatusBadge";
+import { DRAG_TYPE, parseDragPayload } from "./ComponentPalette";
+import type { ProblemDetail } from "@/lib/types";
+import { getApiBase, getWsUrl } from "@/lib/api";
+import { getComponent, defaultConfig } from "@/lib/components";
+import {
+  edgeDefaults,
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  starterToFlow,
+  draftToFlow,
+} from "@/lib/drafts";
+import { getSessionId } from "@/lib/session";
+import { markInProgress, recordSubmission } from "@/lib/progress";
 
 const nodeTypes = { architecture: ArchitectureNode };
 
-const initialNodes: Node[] = [
-  {
-    id: "1",
-    type: "architecture",
-    position: { x: 120, y: 180 },
-    data: { label: "Client / User", variant: "input" },
-  },
-  {
-    id: "2",
-    type: "architecture",
-    position: { x: 400, y: 180 },
-    data: { label: "Load Balancer", variant: "default" },
-  },
-];
-
-const initialEdges: Edge[] = [
-  {
-    id: "e1-2",
-    source: "1",
-    target: "2",
-    animated: true,
-    style: { stroke: "#38bdf8", strokeWidth: 2 },
-  },
-];
-
 type Status = "ready" | "submitting" | "processing" | "completed" | "failed";
 
-export default function Canvas() {
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+interface CanvasProps {
+  problem: ProblemDetail;
+}
+
+function CanvasEditor({ problem }: CanvasProps) {
+  const starter = useMemo(() => starterToFlow(problem.starter_graph), [problem.starter_graph]);
+  const { screenToFlowPosition } = useReactFlow();
+
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+  const [initialized, setInitialized] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("ready");
   const [statusMessage, setStatusMessage] = useState<string>();
   const [evaluationResult, setEvaluationResult] = useState<{
@@ -62,16 +64,43 @@ export default function Canvas() {
   } | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const clientId = "demo_client_123";
+  const sessionIdRef = useRef<string>("");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+  // Load draft or starter graph
+  useEffect(() => {
+    const draft = loadDraft(problem.slug);
+    if (draft && draft.nodes.length > 0) {
+      const { nodes: n, edges: e } = draftToFlow(draft);
+      setNodes(n);
+      setEdges(e);
+      setDraftSavedAt(draft.updatedAt);
+    } else {
+      setNodes(starter.nodes);
+      setEdges(starter.edges);
+    }
+    setInitialized(true);
+    setSelectedNodeId(null);
+    setEvaluationResult(null);
+  }, [problem.slug, starter]);
 
   useEffect(() => {
-    socketRef.current = new WebSocket(`ws://localhost:8000/ws/${clientId}`);
+    markInProgress(problem.slug);
+  }, [problem.slug]);
 
-    socketRef.current.onopen = () => setStatus("ready");
+  // WebSocket
+  useEffect(() => {
+    const sessionId = getSessionId();
+    sessionIdRef.current = sessionId;
+    const ws = new WebSocket(getWsUrl(sessionId));
+    socketRef.current = ws;
 
-    socketRef.current.onmessage = (event) => {
+    ws.onopen = () => setStatus("ready");
+
+    ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-
       if (data.status === "processing") {
         setStatus("processing");
         setStatusMessage("Analyzing graph topology…");
@@ -79,14 +108,30 @@ export default function Canvas() {
         setStatus("completed");
         setStatusMessage(undefined);
         setEvaluationResult(data);
+        recordSubmission(problem.slug, data.score);
       } else if (data.status === "failed") {
         setStatus("failed");
         setStatusMessage(data.message);
       }
     };
 
-    return () => socketRef.current?.close();
-  }, []);
+    return () => ws.close();
+  }, [problem.slug]);
+
+  // Auto-save draft (debounced 1.5s)
+  useEffect(() => {
+    if (!initialized) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveDraft(problem.slug, nodes, edges);
+      setDraftSavedAt(new Date().toISOString());
+    }, 1500);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [nodes, edges, problem.slug, initialized]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -98,11 +143,101 @@ export default function Canvas() {
   );
   const onConnect = useCallback(
     (params: Connection) =>
-      setEdges((eds) =>
-        addEdge({ ...params, animated: true, style: { stroke: "#38bdf8", strokeWidth: 2 } }, eds)
-      ),
+      setEdges((eds) => addEdge({ ...params, ...edgeDefaults }, eds)),
     []
   );
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const raw = e.dataTransfer.getData(DRAG_TYPE);
+      const payload = parseDragPayload(raw);
+      if (!payload) return;
+
+      const component = getComponent(payload.componentType);
+      if (!component) return;
+
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      const id = `node_${Date.now()}`;
+
+      const newNode: Node = {
+        id,
+        type: "architecture",
+        position,
+        data: {
+          label: component.label,
+          variant: component.variant,
+          componentType: component.id,
+          config: defaultConfig(component),
+        },
+      };
+
+      setNodes((nds) => [...nds, newNode]);
+      setSelectedNodeId(id);
+    },
+    [screenToFlowPosition]
+  );
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
+
+  const updateNode = useCallback(
+    (nodeId: string, updates: { label?: string; config?: Record<string, string | number | boolean> }) => {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id !== nodeId) return n;
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              ...(updates.label !== undefined && { label: updates.label }),
+              ...(updates.config !== undefined && { config: updates.config }),
+            },
+          };
+        })
+      );
+    },
+    []
+  );
+
+  const deleteNode = useCallback((nodeId: string) => {
+    setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    setSelectedNodeId(null);
+  }, []);
+
+  const resetCanvas = useCallback(() => {
+    setNodes(starter.nodes);
+    setEdges(starter.edges);
+    setSelectedNodeId(null);
+    setEvaluationResult(null);
+    clearDraft(problem.slug);
+    setDraftSavedAt(null);
+  }, [starter, problem.slug]);
+
+  // Delete key removes selected node
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedNodeId) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return;
+        e.preventDefault();
+        deleteNode(selectedNodeId);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedNodeId, deleteNode]);
 
   const isBusy = status === "submitting" || status === "processing";
 
@@ -112,19 +247,22 @@ export default function Canvas() {
     setStatusMessage("Queuing evaluation…");
 
     const payload = {
-      problem_id: clientId,
+      session_id: sessionIdRef.current,
+      problem_slug: problem.slug,
       graph: {
         nodes: nodes.map((n) => ({
           id: n.id,
-          type: (n.data.variant as string) || "default",
-          label: (n.data.label as string) || "unknown",
+          component_type: n.data.componentType,
+          type: n.data.variant,
+          label: n.data.label,
+          config: n.data.config ?? {},
         })),
         edges: edges.map((e) => ({ source: e.source, target: e.target })),
       },
     };
 
     try {
-      const response = await fetch("http://localhost:8000/api/evaluate", {
+      const response = await fetch(`${getApiBase()}/api/evaluate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -136,21 +274,22 @@ export default function Canvas() {
     }
   };
 
-  const defaultEdgeOptions = useMemo(
-    () => ({ animated: true, style: { stroke: "#38bdf8", strokeWidth: 2 } }),
-    []
-  );
+  const formatSavedAt = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  if (!initialized) return null;
 
   return (
     <div className="relative flex h-full flex-col">
-      {/* Toolbar */}
-      <div className="absolute left-5 top-5 z-10 flex items-center gap-3">
+      <div className="absolute left-5 top-5 z-10 flex flex-wrap items-center gap-3">
         <button
           onClick={submitArchitecture}
           disabled={isBusy}
-          className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition-all hover:shadow-sky-500/40 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-sky-500/25 transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span className="relative z-10 flex items-center gap-2">
+          <span className="flex items-center gap-2">
             {isBusy ? (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -161,27 +300,42 @@ export default function Canvas() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             )}
-            {isBusy ? "Evaluating…" : "Run AI Architecture Check"}
+            {isBusy ? "Evaluating…" : "Submit Design"}
           </span>
         </button>
 
+        <button
+          onClick={resetCanvas}
+          disabled={isBusy}
+          className="rounded-xl border border-white/10 bg-zinc-900/80 px-4 py-2.5 text-sm text-zinc-400 backdrop-blur-md transition-colors hover:border-white/20 hover:text-zinc-200 disabled:opacity-50"
+        >
+          Reset
+        </button>
+
         <StatusBadge status={status} message={statusMessage} />
+
+        {draftSavedAt && (
+          <span className="rounded-full border border-white/5 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-500 backdrop-blur-md">
+            Draft saved {formatSavedAt(draftSavedAt)}
+          </span>
+        )}
       </div>
 
-      {/* Canvas hint */}
-      <div className="absolute bottom-5 left-5 z-10 rounded-xl border border-white/5 bg-zinc-900/70 px-4 py-3 backdrop-blur-md">
-        <p className="text-xs font-medium text-zinc-400">Canvas</p>
-        <p className="mt-0.5 text-sm text-zinc-500">Drag nodes · Connect handles · Submit when ready</p>
-      </div>
-
-      {/* Results panel */}
-      {evaluationResult && (
+      {evaluationResult && !selectedNode && (
         <div className="absolute right-5 top-5 z-10">
           <EvaluationPanel result={evaluationResult} />
         </div>
       )}
 
-      {/* React Flow */}
+      {selectedNode && (
+        <NodeConfigPanel
+          node={selectedNode}
+          onUpdate={updateNode}
+          onDelete={deleteNode}
+          onClose={() => setSelectedNodeId(null)}
+        />
+      )}
+
       <div className="flex-1 archforge-flow">
         <ReactFlow
           nodes={nodes}
@@ -190,17 +344,17 @@ export default function Canvas() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          defaultEdgeOptions={defaultEdgeOptions}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          defaultEdgeOptions={edgeDefaults}
           fitView
           fitViewOptions={{ padding: 0.4 }}
           proOptions={{ hideAttribution: true }}
+          deleteKeyCode={null}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={20}
-            size={1}
-            color="#27272a"
-          />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#27272a" />
           <Controls
             showInteractive={false}
             className="!rounded-xl !border !border-white/10 !bg-zinc-900/90 !shadow-xl !backdrop-blur-md [&>button]:!border-white/5 [&>button]:!bg-transparent [&>button]:!text-zinc-400 [&>button:hover]:!bg-zinc-800"
@@ -208,5 +362,13 @@ export default function Canvas() {
         </ReactFlow>
       </div>
     </div>
+  );
+}
+
+export default function Canvas(props: CanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <CanvasEditor {...props} />
+    </ReactFlowProvider>
   );
 }
