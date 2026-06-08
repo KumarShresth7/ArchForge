@@ -131,18 +131,25 @@ export default async function DashboardPage() {
                 {dashboard.recent_submissions.map((s) => (
                   <li key={s.id}>
                     <Link
-                      href={`/problems/${s.problem_slug}`}
+                      href={`/submissions/${s.id}`}
                       className="flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors hover:bg-zinc-800"
                     >
                       <span className="text-zinc-300">
                         {problemMap[s.problem_slug]?.title ?? s.problem_slug}
                       </span>
-                      <span
-                        className={
-                          s.score >= 70 ? "text-emerald-400" : s.score >= 50 ? "text-amber-400" : "text-rose-400"
-                        }
-                      >
-                        {s.score}/100
+                      <span className="flex items-center gap-3">
+                        {s.rubric_score != null && s.ai_score != null && (
+                          <span className="hidden text-xs text-zinc-600 sm:inline">
+                            R{s.rubric_score} · AI{s.ai_score}
+                          </span>
+                        )}
+                        <span
+                          className={
+                            s.score >= 70 ? "text-emerald-400" : s.score >= 50 ? "text-amber-400" : "text-rose-400"
+                          }
+                        >
+                          {s.score}/100
+                        </span>
                       </span>
                     </Link>
                   </li>

@@ -12,10 +12,12 @@ from auth import get_optional_user
 from database import Base, SessionLocal, engine, get_db
 from migrate import run_migrations
 from models import Problem, User
-from routers import dashboard, drafts, problems, progress, submissions, users
+from routers import dashboard, drafts, leaderboard, notes, problems, progress, submissions, users
 from schemas import EvaluationRequest, EvaluationRubric
 from seed_db import seed_problems
+from rubrics_data import get_rubric_for_slug
 from services.progress import update_progress_after_submission
+from services.rubric import combine_scores, evaluate_rubric
 
 load_dotenv()
 
@@ -35,6 +37,8 @@ app.include_router(drafts.router)
 app.include_router(submissions.router)
 app.include_router(dashboard.router)
 app.include_router(progress.router)
+app.include_router(leaderboard.router)
+app.include_router(notes.router)
 
 
 @app.on_event("startup")
@@ -85,11 +89,20 @@ async def process_and_emit_evaluation(
 ):
     db = SessionLocal()
     try:
-        await manager.send_json_payload(
-            session_id,
-            {"status": "processing", "message": "Analyzing system constraints..."},
-        )
+        # Step 1: Rule-based rubric (fast, deterministic)
+        rubric_config = problem.evaluation_rubric or get_rubric_for_slug(problem.slug)
+        if problem.reference_solution:
+            rubric_config = {**rubric_config, "reference_solution": problem.reference_solution}
 
+        rubric_result = evaluate_rubric(graph, rubric_config)
+
+        await manager.send_json_payload(session_id, {
+            "status": "processing",
+            "message": f"Rubric score: {rubric_result.score}/100 — running AI analysis…",
+            "rubric_score": rubric_result.score,
+        })
+
+        # Step 2: AI evaluation
         llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.1)
         structured_llm = llm.with_structured_output(EvaluationRubric)
 
@@ -98,7 +111,9 @@ async def process_and_emit_evaluation(
                 "system",
                 "You are an expert Principal Cloud Architect. Evaluate the submitted "
                 "high-level system design against the problem requirements. Be specific "
-                "about missing components, scalability issues, and single points of failure.",
+                "about missing components, scalability issues, and single points of failure. "
+                "The rule-based rubric already scored {rubric_score}/100 — focus on qualitative "
+                "analysis the rubric cannot capture.",
             ),
             (
                 "human",
@@ -106,36 +121,52 @@ async def process_and_emit_evaluation(
                 "Description: {description}\n\n"
                 "Functional requirements:\n{functional}\n\n"
                 "Non-functional requirements:\n{non_functional}\n\n"
+                "Rubric feedback:\n{rubric_feedback}\n\n"
                 "Submitted architecture graph:\n{graph_data}\n\n"
-                "Score 0-100 and provide bottlenecks and actionable suggestions.",
+                "Score 0-100 for qualitative architecture quality and provide bottlenecks and suggestions.",
             ),
         ])
 
         chain = prompt | structured_llm
-        result = await chain.ainvoke({
+        ai_result = await chain.ainvoke({
             "title": problem.title,
             "description": problem.description,
             "functional": "\n".join(f"- {r}" for r in problem.functional_requirements),
             "non_functional": "\n".join(f"- {r}" for r in problem.non_functional_requirements),
+            "rubric_score": rubric_result.score,
+            "rubric_feedback": "\n".join(f"- {f}" for f in rubric_result.feedback),
             "graph_data": json.dumps(graph),
         })
+
+        # Step 3: Hybrid score
+        final_score = combine_scores(rubric_result.score, ai_result.score)
 
         if user_id:
             update_progress_after_submission(
                 db,
                 user_id,
                 problem.slug,
-                result.score,
+                final_score,
                 graph,
-                result.bottlenecks,
-                result.suggestions,
+                ai_result.bottlenecks,
+                ai_result.suggestions,
+                rubric_score=rubric_result.score,
+                ai_score=ai_result.score,
+                rubric_feedback=rubric_result.feedback,
             )
 
         await manager.send_json_payload(session_id, {
             "status": "completed",
-            "score": result.score,
-            "bottlenecks": result.bottlenecks,
-            "suggestions": result.suggestions,
+            "score": final_score,
+            "rubric_score": rubric_result.score,
+            "ai_score": ai_result.score,
+            "rubric_feedback": rubric_result.feedback,
+            "must_have_met": rubric_result.must_have_met,
+            "must_have_missing": rubric_result.must_have_missing,
+            "should_have_met": rubric_result.should_have_met,
+            "reference_match_pct": rubric_result.reference_match_pct,
+            "bottlenecks": ai_result.bottlenecks,
+            "suggestions": ai_result.suggestions,
             "problem_slug": problem.slug,
         })
 

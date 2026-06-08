@@ -31,6 +31,12 @@ export default function AppHeader({ breadcrumb, right }: AppHeaderProps) {
         <Link href="/problems" className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block">
           Problems
         </Link>
+        <Link href="/leaderboard" className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block">
+          Leaderboard
+        </Link>
+        <Link href="/profile" className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block">
+          Profile
+        </Link>
         {right ?? <UserMenu />}
       </div>
     </header>

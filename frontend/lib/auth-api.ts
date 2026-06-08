@@ -96,3 +96,28 @@ export async function fetchProblemContext(
   if (!res.ok) return null;
   return res.json();
 }
+
+export async function fetchSubmission(token: string, id: string): Promise<import("./types").SubmissionDetail> {
+  return authFetch(`/api/submissions/${id}`, token);
+}
+
+export async function fetchSubmissions(
+  token: string,
+  problemSlug?: string,
+  limit = 20
+): Promise<import("./types").SubmissionSummary[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (problemSlug) params.set("problem_slug", problemSlug);
+  return authFetch(`/api/submissions?${params}`, token);
+}
+
+export async function fetchNote(token: string, slug: string): Promise<{ content: string; updated_at: string | null }> {
+  return authFetch(`/api/notes/${slug}`, token);
+}
+
+export async function saveNote(token: string, slug: string, content: string) {
+  return authFetch(`/api/notes/${slug}`, token, {
+    method: "PUT",
+    body: JSON.stringify({ content }),
+  });
+}

@@ -88,11 +88,18 @@ class SubmissionResponse(BaseModel):
     id: str
     problem_slug: str
     score: int
+    rubric_score: int | None = None
+    ai_score: int | None = None
+    rubric_feedback: list[str] = []
     bottlenecks: list[str]
     suggestions: list[str]
     submitted_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SubmissionDetailResponse(SubmissionResponse):
+    graph_json: dict
 
 
 class DashboardStats(BaseModel):
@@ -135,3 +142,13 @@ class ProblemContextResponse(BaseModel):
 class LocalSyncRequest(BaseModel):
     progress: dict[str, dict]
     drafts: dict[str, dict]
+
+
+class NoteResponse(BaseModel):
+    problem_slug: str
+    content: str
+    updated_at: datetime | None = None
+
+
+class NoteUpsertRequest(BaseModel):
+    content: str

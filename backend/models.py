@@ -19,6 +19,8 @@ class Problem(Base):
     non_functional_requirements: Mapped[list] = mapped_column(JSON, default=list)
     hints: Mapped[list] = mapped_column(JSON, default=list)
     starter_graph: Mapped[dict] = mapped_column(JSON, default=dict)
+    evaluation_rubric: Mapped[dict] = mapped_column(JSON, default=dict)
+    reference_solution: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class User(Base):
@@ -71,8 +73,24 @@ class Submission(Base):
     problem_slug: Mapped[str] = mapped_column(String, index=True)
     graph_json: Mapped[dict] = mapped_column(JSON, default=dict)
     score: Mapped[int] = mapped_column(Integer)
+    rubric_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ai_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rubric_feedback: Mapped[list] = mapped_column(JSON, default=list)
     bottlenecks: Mapped[list] = mapped_column(JSON, default=list)
     suggestions: Mapped[list] = mapped_column(JSON, default=list)
     submitted_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class ProblemNote(Base):
+    __tablename__ = "problem_notes"
+    __table_args__ = (UniqueConstraint("user_id", "problem_slug"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    problem_slug: Mapped[str] = mapped_column(String, index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )

@@ -15,6 +15,9 @@ def update_progress_after_submission(
     graph: dict,
     bottlenecks: list[str],
     suggestions: list[str],
+    rubric_score: int | None = None,
+    ai_score: int | None = None,
+    rubric_feedback: list[str] | None = None,
 ):
     submission = Submission(
         id=str(uuid.uuid4()),
@@ -22,6 +25,9 @@ def update_progress_after_submission(
         problem_slug=problem_slug,
         graph_json=graph,
         score=score,
+        rubric_score=rubric_score,
+        ai_score=ai_score,
+        rubric_feedback=rubric_feedback or [],
         bottlenecks=bottlenecks,
         suggestions=suggestions,
         submitted_at=datetime.now(timezone.utc),

@@ -6,6 +6,8 @@ import type { ProblemDetail, ProblemSummary } from "@/lib/types";
 import { fetchProblemContext } from "@/lib/auth-api";
 import { areHintsUnlockedLocally } from "@/lib/progress";
 import SimilarProblems from "./SimilarProblems";
+import AttemptHistory from "./AttemptHistory";
+import ProblemNotes from "./ProblemNotes";
 
 interface ProblemPanelProps {
   problem: ProblemDetail;
@@ -141,6 +143,10 @@ export default function ProblemPanel({ problem, problemMap }: ProblemPanelProps)
         </section>
 
         <SimilarProblems slugs={similarSlugs} problemMap={problemMap} />
+
+        <AttemptHistory problemSlug={problem.slug} />
+
+        <ProblemNotes problemSlug={problem.slug} />
       </div>
     </aside>
   );

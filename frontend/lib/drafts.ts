@@ -102,4 +102,48 @@ export function getDraftSavedAt(slug: string): string | null {
   return draft?.updatedAt ?? null;
 }
 
+export function submissionGraphToFlow(graph: {
+  nodes: Array<{
+    id: string;
+    component_type?: string;
+    componentType?: string;
+    type?: string;
+    label: string;
+    position?: { x: number; y: number };
+    config?: Record<string, string | number | boolean>;
+  }>;
+  edges: Array<{ id?: string; source: string; target: string }>;
+}): { nodes: Node[]; edges: Edge[] } {
+  const cols = 3;
+  const xGap = 220;
+  const yGap = 140;
+
+  return {
+    nodes: graph.nodes.map((n, i) => {
+      const componentType = n.component_type ?? n.componentType ?? "app_server";
+      const position = n.position ?? {
+        x: 80 + (i % cols) * xGap,
+        y: 80 + Math.floor(i / cols) * yGap,
+      };
+      return {
+        id: n.id,
+        type: "architecture",
+        position,
+        data: {
+          label: n.label,
+          variant: n.type ?? "default",
+          componentType,
+          config: n.config ?? {},
+        },
+      };
+    }),
+    edges: graph.edges.map((e, i) => ({
+      id: e.id ?? `e_${i}`,
+      source: e.source,
+      target: e.target,
+      ...edgeDefaults,
+    })),
+  };
+}
+
 export { edgeDefaults };

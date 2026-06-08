@@ -28,3 +28,21 @@ def run_migrations():
                         "ADD COLUMN hints_unlocked BOOLEAN DEFAULT 0"
                     )
                 )
+
+    if "problems" in inspector.get_table_names():
+        prob_cols = {c["name"] for c in inspector.get_columns("problems")}
+        with engine.begin() as conn:
+            if "evaluation_rubric" not in prob_cols:
+                conn.execute(text("ALTER TABLE problems ADD COLUMN evaluation_rubric JSON"))
+            if "reference_solution" not in prob_cols:
+                conn.execute(text("ALTER TABLE problems ADD COLUMN reference_solution JSON"))
+
+    if "submissions" in inspector.get_table_names():
+        sub_cols = {c["name"] for c in inspector.get_columns("submissions")}
+        with engine.begin() as conn:
+            if "rubric_score" not in sub_cols:
+                conn.execute(text("ALTER TABLE submissions ADD COLUMN rubric_score INTEGER"))
+            if "ai_score" not in sub_cols:
+                conn.execute(text("ALTER TABLE submissions ADD COLUMN ai_score INTEGER"))
+            if "rubric_feedback" not in sub_cols:
+                conn.execute(text("ALTER TABLE submissions ADD COLUMN rubric_feedback JSON"))

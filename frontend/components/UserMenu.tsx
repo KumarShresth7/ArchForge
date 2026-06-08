@@ -36,6 +36,12 @@ export default function UserMenu() {
       >
         Dashboard
       </Link>
+      <Link
+        href="/profile"
+        className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block"
+      >
+        Profile
+      </Link>
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-xs font-bold text-white">
           {initials || "U"}

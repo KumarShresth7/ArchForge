@@ -38,6 +38,13 @@ export interface ProblemDetail extends ProblemSummary {
 
 export interface EvaluationResult {
   score: number;
+  rubric_score?: number;
+  ai_score?: number;
+  rubric_feedback?: string[];
+  must_have_met?: string[];
+  must_have_missing?: string[];
+  should_have_met?: string[];
+  reference_match_pct?: number;
   bottlenecks: string[];
   suggestions: string[];
   problem_slug?: string;
@@ -57,6 +64,7 @@ export interface UserProfile {
   email: string;
   name: string;
   image: string | null;
+  created_at?: string;
 }
 
 export interface DashboardStats {
@@ -91,9 +99,26 @@ export interface SubmissionSummary {
   id: string;
   problem_slug: string;
   score: number;
+  rubric_score?: number | null;
+  ai_score?: number | null;
+  rubric_feedback?: string[];
   bottlenecks: string[];
   suggestions: string[];
   submitted_at: string;
+}
+
+export interface SubmissionDetail extends SubmissionSummary {
+  graph_json: {
+    nodes: Array<{
+      id: string;
+      component_type?: string;
+      type?: string;
+      label: string;
+      position?: { x: number; y: number };
+      config?: Record<string, string | number | boolean>;
+    }>;
+    edges: Array<{ id?: string; source: string; target: string }>;
+  };
 }
 
 export interface DashboardData {

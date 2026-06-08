@@ -26,7 +26,7 @@ import NodeConfigPanel from "./NodeConfigPanel";
 import StatusBadge from "./StatusBadge";
 import { DRAG_TYPE, parseDragPayload } from "./ComponentPalette";
 import { useSession } from "next-auth/react";
-import type { ProblemDetail } from "@/lib/types";
+import type { ProblemDetail, EvaluationResult } from "@/lib/types";
 import { getApiBase, getWsUrl } from "@/lib/api";
 import { fetchServerDraft, saveServerDraft, deleteServerDraft } from "@/lib/auth-api";
 import { getComponent, defaultConfig } from "@/lib/components";
@@ -63,11 +63,7 @@ function CanvasEditor({ problem }: CanvasProps) {
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("ready");
   const [statusMessage, setStatusMessage] = useState<string>();
-  const [evaluationResult, setEvaluationResult] = useState<{
-    score: number;
-    bottlenecks: string[];
-    suggestions: string[];
-  } | null>(null);
+  const [evaluationResult, setEvaluationResult] = useState<EvaluationResult | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string>("");
@@ -139,7 +135,7 @@ function CanvasEditor({ problem }: CanvasProps) {
       const data = JSON.parse(event.data);
       if (data.status === "processing") {
         setStatus("processing");
-        setStatusMessage("Analyzing graph topology…");
+        setStatusMessage(data.message ?? "Analyzing graph topology…");
       } else if (data.status === "completed") {
         setStatus("completed");
         setStatusMessage(undefined);
@@ -316,6 +312,7 @@ function CanvasEditor({ problem }: CanvasProps) {
           component_type: n.data.componentType,
           type: n.data.variant,
           label: n.data.label,
+          position: n.position,
           config: n.data.config ?? {},
         })),
         edges: edges.map((e) => ({ source: e.source, target: e.target })),
