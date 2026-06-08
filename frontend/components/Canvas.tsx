@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import Link from "next/link";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -24,8 +25,10 @@ import EvaluationPanel from "./EvaluationPanel";
 import NodeConfigPanel from "./NodeConfigPanel";
 import StatusBadge from "./StatusBadge";
 import { DRAG_TYPE, parseDragPayload } from "./ComponentPalette";
+import { useSession } from "next-auth/react";
 import type { ProblemDetail } from "@/lib/types";
 import { getApiBase, getWsUrl } from "@/lib/api";
+import { fetchServerDraft, saveServerDraft, deleteServerDraft } from "@/lib/auth-api";
 import { getComponent, defaultConfig } from "@/lib/components";
 import {
   edgeDefaults,
@@ -34,6 +37,7 @@ import {
   clearDraft,
   starterToFlow,
   draftToFlow,
+  flowToDraft,
 } from "@/lib/drafts";
 import { getSessionId } from "@/lib/session";
 import { markInProgress, recordSubmission } from "@/lib/progress";
@@ -47,6 +51,8 @@ interface CanvasProps {
 }
 
 function CanvasEditor({ problem }: CanvasProps) {
+  const { data: session } = useSession();
+  const accessToken = session?.accessToken;
   const starter = useMemo(() => starterToFlow(problem.starter_graph), [problem.starter_graph]);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -71,20 +77,50 @@ function CanvasEditor({ problem }: CanvasProps) {
 
   // Load draft or starter graph
   useEffect(() => {
-    const draft = loadDraft(problem.slug);
-    if (draft && draft.nodes.length > 0) {
-      const { nodes: n, edges: e } = draftToFlow(draft);
-      setNodes(n);
-      setEdges(e);
-      setDraftSavedAt(draft.updatedAt);
-    } else {
-      setNodes(starter.nodes);
-      setEdges(starter.edges);
+    let cancelled = false;
+
+    async function loadGraph() {
+      if (accessToken) {
+        try {
+          const serverDraft = await fetchServerDraft(accessToken, problem.slug);
+          if (!cancelled && serverDraft?.nodes?.length) {
+            const { nodes: n, edges: e } = draftToFlow(serverDraft);
+            setNodes(n);
+            setEdges(e);
+            setDraftSavedAt(serverDraft.updatedAt);
+            setInitialized(true);
+            setSelectedNodeId(null);
+            setEvaluationResult(null);
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+
+      const draft = loadDraft(problem.slug);
+      if (!cancelled) {
+        if (draft && draft.nodes.length > 0) {
+          const { nodes: n, edges: e } = draftToFlow(draft);
+          setNodes(n);
+          setEdges(e);
+          setDraftSavedAt(draft.updatedAt);
+        } else {
+          setNodes(starter.nodes);
+          setEdges(starter.edges);
+        }
+        setInitialized(true);
+        setSelectedNodeId(null);
+        setEvaluationResult(null);
+      }
     }
-    setInitialized(true);
-    setSelectedNodeId(null);
-    setEvaluationResult(null);
-  }, [problem.slug, starter]);
+
+    setInitialized(false);
+    loadGraph();
+    return () => {
+      cancelled = true;
+    };
+  }, [problem.slug, starter, accessToken]);
 
   useEffect(() => {
     markInProgress(problem.slug);
@@ -108,7 +144,14 @@ function CanvasEditor({ problem }: CanvasProps) {
         setStatus("completed");
         setStatusMessage(undefined);
         setEvaluationResult(data);
-        recordSubmission(problem.slug, data.score);
+        if (!accessToken) {
+          recordSubmission(problem.slug, data.score);
+        }
+        window.dispatchEvent(
+          new CustomEvent("archforge-submission-complete", {
+            detail: { slug: problem.slug, score: data.score },
+          })
+        );
       } else if (data.status === "failed") {
         setStatus("failed");
         setStatusMessage(data.message);
@@ -116,22 +159,33 @@ function CanvasEditor({ problem }: CanvasProps) {
     };
 
     return () => ws.close();
-  }, [problem.slug]);
+  }, [problem.slug, accessToken]);
 
   // Auto-save draft (debounced 1.5s)
   useEffect(() => {
     if (!initialized) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      saveDraft(problem.slug, nodes, edges);
-      setDraftSavedAt(new Date().toISOString());
+    saveTimerRef.current = setTimeout(async () => {
+      const now = new Date().toISOString();
+      if (accessToken) {
+        try {
+          await saveServerDraft(accessToken, problem.slug, flowToDraft(nodes, edges));
+          setDraftSavedAt(now);
+        } catch {
+          saveDraft(problem.slug, nodes, edges);
+          setDraftSavedAt(now);
+        }
+      } else {
+        saveDraft(problem.slug, nodes, edges);
+        setDraftSavedAt(now);
+      }
     }, 1500);
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [nodes, edges, problem.slug, initialized]);
+  }, [nodes, edges, problem.slug, initialized, accessToken]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -216,14 +270,21 @@ function CanvasEditor({ problem }: CanvasProps) {
     setSelectedNodeId(null);
   }, []);
 
-  const resetCanvas = useCallback(() => {
+  const resetCanvas = useCallback(async () => {
     setNodes(starter.nodes);
     setEdges(starter.edges);
     setSelectedNodeId(null);
     setEvaluationResult(null);
     clearDraft(problem.slug);
+    if (accessToken) {
+      try {
+        await deleteServerDraft(accessToken, problem.slug);
+      } catch {
+        /* ignore */
+      }
+    }
     setDraftSavedAt(null);
-  }, [starter, problem.slug]);
+  }, [starter, problem.slug, accessToken]);
 
   // Delete key removes selected node
   useEffect(() => {
@@ -262,9 +323,12 @@ function CanvasEditor({ problem }: CanvasProps) {
     };
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
       const response = await fetch(`${getApiBase()}/api/evaluate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error("Payload rejected by backend queue.");
@@ -316,8 +380,17 @@ function CanvasEditor({ problem }: CanvasProps) {
 
         {draftSavedAt && (
           <span className="rounded-full border border-white/5 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-500 backdrop-blur-md">
-            Draft saved {formatSavedAt(draftSavedAt)}
+            {accessToken ? "Cloud" : "Local"} draft · {formatSavedAt(draftSavedAt)}
           </span>
+        )}
+
+        {!accessToken && (
+          <Link
+            href="/login"
+            className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-400 backdrop-blur-md hover:bg-sky-500/20"
+          >
+            Sign in to sync
+          </Link>
         )}
       </div>
 

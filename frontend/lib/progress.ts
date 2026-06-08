@@ -53,6 +53,11 @@ export function markInProgress(slug: string): void {
   }
 }
 
+export function areHintsUnlockedLocally(slug: string): boolean {
+  const p = getProblemProgress(slug);
+  return p.attemptCount >= 1 && p.bestScore !== null && p.bestScore < 70;
+}
+
 export function getStats() {
   const map = getProgressMap();
   const entries = Object.values(map);

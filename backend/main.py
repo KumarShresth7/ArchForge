@@ -2,17 +2,20 @@ import json
 from typing import Dict
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from sqlalchemy.orm import Session
 
+from auth import get_optional_user
 from database import Base, SessionLocal, engine, get_db
-from models import Problem
-from routers import problems
+from migrate import run_migrations
+from models import Problem, User
+from routers import dashboard, drafts, problems, progress, submissions, users
 from schemas import EvaluationRequest, EvaluationRubric
 from seed_db import seed_problems
+from services.progress import update_progress_after_submission
 
 load_dotenv()
 
@@ -27,11 +30,17 @@ app.add_middleware(
 )
 
 app.include_router(problems.router)
+app.include_router(users.router)
+app.include_router(drafts.router)
+app.include_router(submissions.router)
+app.include_router(dashboard.router)
+app.include_router(progress.router)
 
 
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     db = SessionLocal()
     try:
         seed_problems(db)
@@ -70,9 +79,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
 async def process_and_emit_evaluation(
     session_id: str,
+    user_id: str | None,
     problem: Problem,
     graph: dict,
 ):
+    db = SessionLocal()
     try:
         await manager.send_json_payload(
             session_id,
@@ -109,6 +120,17 @@ async def process_and_emit_evaluation(
             "graph_data": json.dumps(graph),
         })
 
+        if user_id:
+            update_progress_after_submission(
+                db,
+                user_id,
+                problem.slug,
+                result.score,
+                graph,
+                result.bottlenecks,
+                result.suggestions,
+            )
+
         await manager.send_json_payload(session_id, {
             "status": "completed",
             "score": result.score,
@@ -122,6 +144,8 @@ async def process_and_emit_evaluation(
             "status": "failed",
             "message": f"AI Engine evaluation error: {str(e)}",
         })
+    finally:
+        db.close()
 
 
 @app.post("/api/evaluate")
@@ -129,6 +153,7 @@ async def evaluate_architecture(
     request: EvaluationRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     problem = db.query(Problem).filter(Problem.slug == request.problem_slug).first()
     if not problem:
@@ -137,6 +162,7 @@ async def evaluate_architecture(
     background_tasks.add_task(
         process_and_emit_evaluation,
         request.session_id,
+        user.id if user else None,
         problem,
         request.graph,
     )

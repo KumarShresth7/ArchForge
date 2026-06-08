@@ -1,10 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import type { ProblemDetail } from "@/lib/types";
+import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import type { ProblemDetail, ProblemSummary } from "@/lib/types";
+import { fetchProblemContext } from "@/lib/auth-api";
+import { areHintsUnlockedLocally } from "@/lib/progress";
+import SimilarProblems from "./SimilarProblems";
 
-export default function ProblemPanel({ problem }: { problem: ProblemDetail }) {
+interface ProblemPanelProps {
+  problem: ProblemDetail;
+  problemMap: Record<string, ProblemSummary>;
+}
+
+export default function ProblemPanel({ problem, problemMap }: ProblemPanelProps) {
+  const { data: session } = useSession();
   const [showHints, setShowHints] = useState(false);
+  const [hintsUnlocked, setHintsUnlocked] = useState(false);
+  const [similarSlugs, setSimilarSlugs] = useState<string[]>([]);
+
+  const loadContext = useCallback(async () => {
+    const localUnlocked = areHintsUnlockedLocally(problem.slug);
+    const ctx = await fetchProblemContext(problem.slug, session?.accessToken);
+    if (ctx) {
+      setHintsUnlocked(ctx.hints_unlocked || localUnlocked);
+      setSimilarSlugs(ctx.similar_slugs);
+    } else {
+      setHintsUnlocked(localUnlocked);
+      setSimilarSlugs([]);
+    }
+  }, [problem.slug, session?.accessToken]);
+
+  useEffect(() => {
+    loadContext();
+  }, [loadContext]);
+
+  useEffect(() => {
+    const onSubmission = () => loadContext();
+    window.addEventListener("archforge-submission-complete", onSubmission);
+    return () => window.removeEventListener("archforge-submission-complete", onSubmission);
+  }, [loadContext]);
 
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-r border-white/5 bg-zinc-950/90 backdrop-blur-xl">
@@ -32,7 +66,7 @@ export default function ProblemPanel({ problem }: { problem: ProblemDetail }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
             Description
@@ -70,13 +104,24 @@ export default function ProblemPanel({ problem }: { problem: ProblemDetail }) {
 
         <section>
           <button
-            onClick={() => setShowHints(!showHints)}
-            className="flex w-full items-center justify-between rounded-lg border border-white/5 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 transition-colors hover:border-white/10 hover:text-zinc-200"
+            onClick={() => hintsUnlocked && setShowHints(!showHints)}
+            disabled={!hintsUnlocked}
+            className={[
+              "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors",
+              hintsUnlocked
+                ? "border-white/5 bg-zinc-900 text-zinc-400 hover:border-white/10 hover:text-zinc-200"
+                : "cursor-not-allowed border-white/5 bg-zinc-900/50 text-zinc-600",
+            ].join(" ")}
           >
-            <span>Hints</span>
-            <span className="text-xs text-zinc-600">{showHints ? "Hide" : "Show"}</span>
+            <span className="flex items-center gap-2">
+              {!hintsUnlocked && <span>🔒</span>}
+              Hints
+            </span>
+            <span className="text-xs text-zinc-600">
+              {hintsUnlocked ? (showHints ? "Hide" : "Show") : "Submit first (< 70)"}
+            </span>
           </button>
-          {showHints && (
+          {hintsUnlocked && showHints && (
             <ul className="mt-2 space-y-2">
               {problem.hints.map((hint, i) => (
                 <li
@@ -88,7 +133,14 @@ export default function ProblemPanel({ problem }: { problem: ProblemDetail }) {
               ))}
             </ul>
           )}
+          {!hintsUnlocked && (
+            <p className="mt-2 text-xs text-zinc-600">
+              Hints unlock after your first submission that scores below 70.
+            </p>
+          )}
         </section>
+
+        <SimilarProblems slugs={similarSlugs} problemMap={problemMap} />
       </div>
     </aside>
   );

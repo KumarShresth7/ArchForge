@@ -1,4 +1,5 @@
 import Link from "next/link";
+import UserMenu from "./UserMenu";
 
 interface AppHeaderProps {
   breadcrumb?: string;
@@ -27,18 +28,10 @@ export default function AppHeader({ breadcrumb, right }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-4 text-sm">
-        <Link
-          href="/problems"
-          className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block"
-        >
+        <Link href="/problems" className="hidden text-zinc-400 transition-colors hover:text-zinc-200 sm:block">
           Problems
         </Link>
-        {right ?? (
-          <div className="hidden items-center gap-2 text-zinc-500 sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Engine online
-          </div>
-        )}
+        {right ?? <UserMenu />}
       </div>
     </header>
   );
