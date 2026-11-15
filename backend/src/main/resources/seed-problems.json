@@ -1,0 +1,1051 @@
+[
+  {
+    "id": "prob_001",
+    "slug": "design-url-shortener",
+    "title": "Design URL Shortener",
+    "difficulty": "easy",
+    "tags": [
+      "hashing",
+      "caching",
+      "scaling"
+    ],
+    "description": "Design a URL shortening service like bit.ly that takes long URLs and generates short, unique aliases that redirect to the original URL.",
+    "functional_requirements": [
+      "Generate a short alias for a given long URL",
+      "Redirect users from short URL to original URL",
+      "Support custom aliases (optional)",
+      "Track click analytics per link"
+    ],
+    "non_functional_requirements": [
+      "100 million URLs stored",
+      "10:1 read-to-write ratio",
+      "10K reads per second peak",
+      "99.9% availability",
+      "Redirects must complete in < 100ms p99"
+    ],
+    "hints": [
+      "Consider base62 encoding for short keys",
+      "Use a cache layer for hot URLs",
+      "Separate read and write paths early"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Client / User",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Load Balancer",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "web_client",
+        "load_balancer",
+        "app_server",
+        "sql_database"
+      ],
+      "should_have": [
+        "redis",
+        "cdn"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "web_client",
+        "load_balancer",
+        "app_server",
+        "redis",
+        "sql_database"
+      ],
+      "description": "Client \u2192 LB \u2192 App Server \u2192 Redis cache + SQL DB for persistence"
+    }
+  },
+  {
+    "id": "prob_002",
+    "slug": "design-rate-limiter",
+    "title": "Design Rate Limiter",
+    "difficulty": "medium",
+    "tags": [
+      "distributed-systems",
+      "caching",
+      "api-design"
+    ],
+    "description": "Design a distributed rate limiting system that protects APIs from abuse by limiting the number of requests a client can make within a time window.",
+    "functional_requirements": [
+      "Limit requests per user/IP/API key",
+      "Support multiple rate limit rules (e.g. 100 req/min)",
+      "Return proper HTTP 429 when limit exceeded",
+      "Support different limits per endpoint"
+    ],
+    "non_functional_requirements": [
+      "Low latency overhead (< 5ms)",
+      "Highly available \u2014 rate limiter failure should not block traffic",
+      "Accurate across distributed servers",
+      "1M+ API requests per second globally"
+    ],
+    "hints": [
+      "Token bucket or sliding window algorithms",
+      "Redis is commonly used for counters",
+      "Consider edge vs centralized limiting"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "API Client",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "API Gateway",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "api_gateway",
+        "redis",
+        "app_server"
+      ],
+      "should_have": [
+        "load_balancer",
+        "rate_limiter"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "api_gateway",
+        "rate_limiter",
+        "redis",
+        "app_server",
+        "load_balancer"
+      ],
+      "description": "Gateway with rate limiter backed by Redis counters"
+    }
+  },
+  {
+    "id": "prob_003",
+    "slug": "design-twitter",
+    "title": "Design Twitter (X)",
+    "difficulty": "hard",
+    "tags": [
+      "feeds",
+      "fan-out",
+      "caching",
+      "scaling"
+    ],
+    "description": "Design a social media platform where users can post tweets, follow others, and view a personalized home timeline.",
+    "functional_requirements": [
+      "Post tweets (280 chars)",
+      "Follow / unfollow users",
+      "View home timeline of followed users' tweets",
+      "Search tweets by keyword",
+      "Like and retweet"
+    ],
+    "non_functional_requirements": [
+      "300M daily active users",
+      "500M tweets per day",
+      "Timeline load < 200ms",
+      "Highly available read path"
+    ],
+    "hints": [
+      "Fan-out on write vs fan-out on read tradeoff",
+      "Celebrity user problem",
+      "Use CDN for media attachments"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Mobile / Web Client",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Load Balancer",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "nosql_database",
+        "redis"
+      ],
+      "should_have": [
+        "message_queue",
+        "cdn",
+        "blob_storage"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "redis",
+        "nosql_database",
+        "message_queue",
+        "cdn"
+      ],
+      "description": "Fan-out timeline with cache, queue, and media CDN"
+    }
+  },
+  {
+    "id": "prob_004",
+    "slug": "design-netflix",
+    "title": "Design Netflix",
+    "difficulty": "hard",
+    "tags": [
+      "streaming",
+      "cdn",
+      "microservices",
+      "recommendations"
+    ],
+    "description": "Design a video streaming platform that lets users browse, search, and watch on-demand content with personalized recommendations.",
+    "functional_requirements": [
+      "Stream video with adaptive bitrate",
+      "Search and browse catalog",
+      "Personalized recommendations",
+      "Resume playback across devices",
+      "Support multiple profiles per account"
+    ],
+    "non_functional_requirements": [
+      "200M subscribers globally",
+      "Support 4K streaming",
+      "99.99% availability for playback",
+      "Low buffering \u2014 start playback in < 2s"
+    ],
+    "hints": [
+      "CDN is critical for video delivery",
+      "Separate metadata from video blob storage",
+      "Transcoding pipeline for multiple formats"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Smart TV / Mobile",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "CDN",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "cdn",
+        "app_server",
+        "blob_storage",
+        "nosql_database"
+      ],
+      "should_have": [
+        "load_balancer",
+        "microservice",
+        "search_index"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "cdn",
+        "load_balancer",
+        "microservice",
+        "blob_storage",
+        "nosql_database"
+      ],
+      "description": "CDN for video + metadata services + blob storage"
+    }
+  },
+  {
+    "id": "prob_005",
+    "slug": "design-uber",
+    "title": "Design Uber",
+    "difficulty": "hard",
+    "tags": [
+      "geolocation",
+      "real-time",
+      "matching",
+      "scaling"
+    ],
+    "description": "Design a ride-sharing platform connecting riders with nearby drivers in real time.",
+    "functional_requirements": [
+      "Riders request rides with pickup/dropoff",
+      "Match rider to nearest available driver",
+      "Real-time location tracking on map",
+      "Fare estimation and payment",
+      "Driver and rider ratings"
+    ],
+    "non_functional_requirements": [
+      "1M rides per day in a city",
+      "Match driver within 30 seconds",
+      "Location updates every 3-4 seconds",
+      "99.9% availability"
+    ],
+    "hints": [
+      "Geospatial indexing (QuadTree, Geohash)",
+      "WebSockets for live location",
+      "Surge pricing needs demand aggregation"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Rider App",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 160
+          }
+        },
+        {
+          "id": "2",
+          "label": "Driver App",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 280
+          }
+        },
+        {
+          "id": "3",
+          "label": "API Gateway",
+          "variant": "default",
+          "position": {
+            "x": 340,
+            "y": 220
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-3",
+          "source": "1",
+          "target": "3"
+        },
+        {
+          "id": "e2-3",
+          "source": "2",
+          "target": "3"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "api_gateway",
+        "app_server",
+        "nosql_database"
+      ],
+      "should_have": [
+        "redis",
+        "message_queue",
+        "load_balancer"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "api_gateway",
+        "app_server",
+        "redis",
+        "nosql_database",
+        "message_queue"
+      ],
+      "description": "Real-time location with geospatial index and WebSocket updates"
+    }
+  },
+  {
+    "id": "prob_006",
+    "slug": "design-chat-system",
+    "title": "Design WhatsApp / Chat System",
+    "difficulty": "medium",
+    "tags": [
+      "real-time",
+      "messaging",
+      "websockets",
+      "storage"
+    ],
+    "description": "Design a one-on-one and group messaging system with delivery receipts and online presence.",
+    "functional_requirements": [
+      "Send/receive text messages in real time",
+      "One-on-one and group chats",
+      "Delivery and read receipts",
+      "Online/offline presence indicators",
+      "Message history on new device login"
+    ],
+    "non_functional_requirements": [
+      "50M daily active users",
+      "1B messages per day",
+      "Delivery latency < 500ms",
+      "Messages must not be lost"
+    ],
+    "hints": [
+      "WebSockets for real-time delivery",
+      "Message queue for offline users",
+      "Consistent ordering within a chat"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "User A Client",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 160
+          }
+        },
+        {
+          "id": "2",
+          "label": "User B Client",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 280
+          }
+        },
+        {
+          "id": "3",
+          "label": "Chat Server",
+          "variant": "default",
+          "position": {
+            "x": 340,
+            "y": 220
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-3",
+          "source": "1",
+          "target": "3"
+        },
+        {
+          "id": "e2-3",
+          "source": "2",
+          "target": "3"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "app_server",
+        "message_queue",
+        "nosql_database"
+      ],
+      "should_have": [
+        "redis",
+        "load_balancer",
+        "blob_storage"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "message_queue",
+        "redis",
+        "nosql_database"
+      ],
+      "description": "WebSocket server + queue for offline delivery + message store"
+    }
+  },
+  {
+    "id": "prob_007",
+    "slug": "design-web-crawler",
+    "title": "Design Web Crawler",
+    "difficulty": "medium",
+    "tags": [
+      "distributed-systems",
+      "queues",
+      "scaling"
+    ],
+    "description": "Design a scalable web crawler that discovers and indexes billions of web pages while respecting robots.txt and politeness policies.",
+    "functional_requirements": [
+      "Crawl URLs from seed list",
+      "Extract and follow links on pages",
+      "Respect robots.txt",
+      "Avoid re-crawling duplicate URLs",
+      "Store page content for indexing"
+    ],
+    "non_functional_requirements": [
+      "Crawl 1B pages per month",
+      "Politeness: max 1 req/sec per domain",
+      "Handle dynamic JavaScript pages",
+      "Fault tolerant worker failures"
+    ],
+    "hints": [
+      "URL frontier with priority queue",
+      "Bloom filter for deduplication",
+      "Distributed workers with message queue"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Seed URLs",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "URL Frontier",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "app_server",
+        "message_queue",
+        "blob_storage",
+        "nosql_database"
+      ],
+      "should_have": [
+        "load_balancer",
+        "sql_database"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "app_server",
+        "message_queue",
+        "nosql_database",
+        "blob_storage"
+      ],
+      "description": "URL frontier queue + workers + dedup store + content blob storage"
+    }
+  },
+  {
+    "id": "prob_008",
+    "slug": "design-notification-system",
+    "title": "Design Notification System",
+    "difficulty": "medium",
+    "tags": [
+      "queues",
+      "reliability",
+      "multi-channel"
+    ],
+    "description": "Design a multi-channel notification system supporting push, email, SMS, and in-app notifications with user preferences.",
+    "functional_requirements": [
+      "Send push, email, SMS, in-app notifications",
+      "User preference management per channel",
+      "Template-based notification content",
+      "Delivery status tracking",
+      "Rate limiting per user"
+    ],
+    "non_functional_requirements": [
+      "10M notifications per day",
+      "Delivery within 30 seconds for push",
+      "At-least-once delivery guarantee",
+      "Third-party provider failover"
+    ],
+    "hints": [
+      "Separate queues per channel",
+      "Retry with exponential backoff",
+      "Idempotency keys to prevent duplicates"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Service Event",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Notification Service",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "app_server",
+        "message_queue",
+        "nosql_database"
+      ],
+      "should_have": [
+        "redis",
+        "microservice",
+        "load_balancer"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "app_server",
+        "message_queue",
+        "microservice",
+        "redis",
+        "nosql_database"
+      ],
+      "description": "Event bus + per-channel workers + preference store"
+    }
+  },
+  {
+    "id": "prob_009",
+    "slug": "design-pastebin",
+    "title": "Design Pastebin",
+    "difficulty": "easy",
+    "tags": [
+      "storage",
+      "caching",
+      "hashing"
+    ],
+    "description": "Design a text sharing service where users paste code or text and receive a unique URL to share.",
+    "functional_requirements": [
+      "Upload text and get unique URL",
+      "View paste by URL",
+      "Optional expiration time",
+      "Optional password protection"
+    ],
+    "non_functional_requirements": [
+      "10M pastes stored",
+      "5:1 read-to-write ratio",
+      "Paste creation < 200ms",
+      "99.9% availability"
+    ],
+    "hints": [
+      "Object storage for large pastes",
+      "Hash or UUID for paste keys",
+      "Cache popular pastes"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "User Browser",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Web Server",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "web_client",
+        "app_server",
+        "blob_storage",
+        "sql_database"
+      ],
+      "should_have": [
+        "load_balancer",
+        "redis",
+        "cdn"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "web_client",
+        "load_balancer",
+        "app_server",
+        "redis",
+        "blob_storage"
+      ],
+      "description": "Object storage for pastes + cache for hot reads"
+    }
+  },
+  {
+    "id": "prob_010",
+    "slug": "design-yelp",
+    "title": "Design Yelp / Nearby Places",
+    "difficulty": "medium",
+    "tags": [
+      "geolocation",
+      "search",
+      "databases"
+    ],
+    "description": "Design a location-based service to search for nearby businesses (restaurants, shops) with reviews and ratings.",
+    "functional_requirements": [
+      "Search businesses near a location",
+      "Filter by category, rating, distance",
+      "View business details and reviews",
+      "Submit reviews and ratings"
+    ],
+    "non_functional_requirements": [
+      "100M businesses indexed",
+      "Search results in < 500ms",
+      "Support queries within 500m to 50km radius",
+      "10K searches per second peak"
+    ],
+    "hints": [
+      "Geospatial database or index",
+      "Pre-compute popular area results",
+      "Separate search index from review storage"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Mobile Client",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Search API",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "app_server",
+        "nosql_database",
+        "search_index"
+      ],
+      "should_have": [
+        "load_balancer",
+        "redis",
+        "sql_database"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "search_index",
+        "nosql_database",
+        "redis"
+      ],
+      "description": "Geospatial search index + business/review storage"
+    }
+  },
+  {
+    "id": "prob_011",
+    "slug": "design-dropbox",
+    "title": "Design Dropbox",
+    "difficulty": "hard",
+    "tags": [
+      "storage",
+      "sync",
+      "chunking",
+      "consistency"
+    ],
+    "description": "Design a cloud file storage and synchronization service that keeps files in sync across multiple devices.",
+    "functional_requirements": [
+      "Upload and download files",
+      "Sync files across devices automatically",
+      "Share files/folders with other users",
+      "Version history for files",
+      "Conflict resolution on concurrent edits"
+    ],
+    "non_functional_requirements": [
+      "500M users, 100PB total storage",
+      "Sync notification within 10 seconds",
+      "Support files up to 50GB",
+      "99.99% durability"
+    ],
+    "hints": [
+      "Chunk large files for deduplication",
+      "Metadata DB separate from blob storage",
+      "Long polling or WebSockets for sync notifications"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Desktop Client",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 160
+          }
+        },
+        {
+          "id": "2",
+          "label": "Mobile Client",
+          "variant": "input",
+          "position": {
+            "x": 60,
+            "y": 280
+          }
+        },
+        {
+          "id": "3",
+          "label": "Sync Service",
+          "variant": "default",
+          "position": {
+            "x": 340,
+            "y": 220
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-3",
+          "source": "1",
+          "target": "3"
+        },
+        {
+          "id": "e2-3",
+          "source": "2",
+          "target": "3"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "app_server",
+        "blob_storage",
+        "sql_database",
+        "message_queue"
+      ],
+      "should_have": [
+        "load_balancer",
+        "cdn",
+        "redis"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "blob_storage",
+        "sql_database",
+        "message_queue"
+      ],
+      "description": "Metadata DB + chunk blob storage + sync notification queue"
+    }
+  },
+  {
+    "id": "prob_012",
+    "slug": "design-instagram",
+    "title": "Design Instagram",
+    "difficulty": "hard",
+    "tags": [
+      "feeds",
+      "media",
+      "cdn",
+      "caching"
+    ],
+    "description": "Design a photo and video sharing social network with feeds, stories, and follower graph.",
+    "functional_requirements": [
+      "Upload photos and videos",
+      "Follow users and view feed",
+      "Like and comment on posts",
+      "Stories (24-hour ephemeral content)",
+      "Explore/discover new content"
+    ],
+    "non_functional_requirements": [
+      "500M daily active users",
+      "100M photos uploaded per day",
+      "Feed load < 300ms",
+      "Media delivery via CDN globally"
+    ],
+    "hints": [
+      "Blob storage + CDN for media",
+      "Feed generation similar to Twitter fan-out",
+      "Thumbnail generation pipeline"
+    ],
+    "starter_graph": {
+      "nodes": [
+        {
+          "id": "1",
+          "label": "Mobile App",
+          "variant": "input",
+          "position": {
+            "x": 80,
+            "y": 200
+          }
+        },
+        {
+          "id": "2",
+          "label": "Load Balancer",
+          "variant": "default",
+          "position": {
+            "x": 320,
+            "y": 200
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1-2",
+          "source": "1",
+          "target": "2"
+        }
+      ]
+    },
+    "evaluation_rubric": {
+      "must_have": [
+        "mobile_client",
+        "load_balancer",
+        "app_server",
+        "blob_storage",
+        "nosql_database",
+        "cdn"
+      ],
+      "should_have": [
+        "redis",
+        "message_queue",
+        "search_index"
+      ],
+      "anti_patterns": []
+    },
+    "reference_solution": {
+      "component_types": [
+        "mobile_client",
+        "cdn",
+        "load_balancer",
+        "app_server",
+        "blob_storage",
+        "nosql_database",
+        "redis"
+      ],
+      "description": "Media CDN + feed service + blob storage + social graph DB"
+    }
+  }
+]
