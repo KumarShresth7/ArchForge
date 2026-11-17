@@ -44,7 +44,6 @@ AI Integration: Groq Inference API
 
 🧠 System Design Flow
 
-```mermaid
 graph TD
     %% Frontend Components
     subgraph Client [Next.js Client]
@@ -88,10 +87,11 @@ graph TD
     WS <--> EvalHandler
 
     StateCtrl <--> PG
-
+    
     EvalHandler --> DetRubric
     DetRubric --> Groq
     Groq -. "Streamed LLM Tokens" .-> EvalHandler
+
 
 💻 Local Development Setup
 
